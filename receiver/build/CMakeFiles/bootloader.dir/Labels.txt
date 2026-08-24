@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+E:/myoware receiver 2.0/build/CMakeFiles/bootloader
+E:/myoware receiver 2.0/build/CMakeFiles/bootloader.rule
+E:/myoware receiver 2.0/build/CMakeFiles/bootloader-complete.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+E:/myoware receiver 2.0/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
