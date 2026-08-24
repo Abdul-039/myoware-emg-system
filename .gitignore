@@ -1,0 +1,39 @@
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Build outputs
+build/
+**/build/
+cmake-build-*/
+
+# ESP-IDF generated artifacts
+sdkconfig.old
+compile_commands.json
+managed_components/
+dependencies.lock
+
+# Logs and captured data
+*.log
+*.csv
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Windows local metadata
+$RECYCLE.BIN/
