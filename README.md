@@ -13,6 +13,8 @@ Together, these projects form a dual-sensor wireless EMG data acquisition system
 myoware-emg-system/
 ├── README.md
 ├── .gitignore
+├── Mac Address FreeNove/
+│   └── (reference material for FreeNove MAC address lookup)
 ├── receiver/
 │   ├── CMakeLists.txt
 │   ├── main/
@@ -33,29 +35,43 @@ myoware-emg-system/
 ## Hardware block diagram
 
 ```text
-+-------------------+       ESP-NOW / Wi-Fi       +---------------------+
-| MyoWare EMG 1    | --------------------------> | ESP32 Receiver Hub  |
-| (analog EMG)     |                             | (ESP-IDF)           |
-+-------------------+                             | - listens for data  |
-                                                   | - reads joystick    |
-                                                   | - prints CSV        |
-                                                   +----------+----------+
++---------------------+      ESP-NOW / Wi-Fi      +---------------------+
+| MyoWare Shield 1    | -----------------------> | FreeNove ESP32 Hub   |
+| (EMG sensor 1)      |                          | (ESP-IDF receiver)  |
++---------------------+                          | - receives packets  |
+                                                  | - stores EMG data   |
+                                                  | - reads joystick    |
+                                                  | - sends CSV to USB  |
+                                                  +-----------+---------+
                                                               |
-                                                              | USB serial
+                                                              | USB cable
                                                               v
-                                                  +---------------------+
-                                                  | PC / Laptop         |
-                                                  | - Python visualizer |
-                                                  | - CSV logging       |
+                                                  +----------------------+
+                                                  | Laptop / PC          |
+                                                  | - serial monitor     |
+                                                  | - Python visualizer  |
+                                                  | - CSV logging        |
+                                                  +----------------------+
+
++---------------------+      ESP-NOW / Wi-Fi      +---------------------+
+| MyoWare Shield 2    | -----------------------> | FreeNove ESP32 Hub   |
+| (EMG sensor 2)      |                          | (same central hub)  |
++---------------------+                          | - coordinates both  |
+                                                  | - separates node    |
+                                                  | - merges stream     |
                                                   +---------------------+
 
-+-------------------+       ESP-NOW / Wi-Fi       +---------------------+
-| MyoWare EMG 2    | --------------------------> | ESP32 Sender Node   |
-| (analog EMG)     |                             | (ESP-IDF)           |
-+-------------------+                             | - ADC sampling      |
-                                               | - batch packing     |
-                                               | - transmit packets  |
-                                               +---------------------+
++---------------------+
+| Joystick            |
+| (wired to hub)      |
++---------------------+
+        |
+        v
++---------------------+
+| FreeNove ESP32 Hub  |
+| receives joystick   |
+| ADC input           |
++---------------------+
 ```
 
 ## Software running on each device
@@ -85,7 +101,7 @@ Software running on the PC:
 
 ## Relationship between devices
 
-The sender ESP32 boards collect the analog EMG signal and send wireless data packets to the receiver ESP32 hub. The receiver combines the incoming sensor data, appends joystick information, and sends the final stream over USB serial to the PC. The Python script then plots the incoming channel data and saves it for offline analysis.
+In the practical setup, two MyoWare shields are connected to separate ESP32 sender boards and communicate wirelessly to a single FreeNove ESP32 board through ESP-NOW. The FreeNove board acts as the central hub. It receives the EMG data from both sensors, reads the joystick connected to the same hub, and sends the combined stream to the laptop over USB serial. The Python script on the laptop then plots the live data and logs it as CSV.
 
 ## IDE and toolchain used
 
@@ -139,8 +155,8 @@ Shield MAC: xx:xx:xx:xx:xx:xx
 
 The MAC printed by the board should match the address used in the ESP-NOW peer configuration.
 
-### Method 2: use the folder with the FreeNove MAC address information
-A folder named `Mac address FreeNove` is available and can be used as a reference when identifying the board address. In this project, the sender uses a fixed target MAC address in the code:
+### Method 2: use the `Mac Address FreeNove` folder in this repository
+The repository includes a folder named `Mac Address FreeNove`, which contains reference material used to identify the hardware MAC address of the FreeNove ESP32 board. This is useful when verifying the board identity before configuring ESP-NOW peers. In this project, the sender uses a fixed target MAC address in the code:
 
 ```c
 static uint8_t c3_mac[] = {0xD0, 0xEF, 0x76, 0x1F, 0x83, 0x2C};
