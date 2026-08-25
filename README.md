@@ -34,7 +34,7 @@ myoware-emg-system/
 
 ## Hardware architecture
 
-![EMG Data Acquisition System using ESP-NOW](../architecture.png)
+![EMG Data Acquisition System using ESP-NOW](architecture.png)
 
 > The image above shows the real setup: two MyoWare sensor boards communicate wirelessly with one FreeNove ESP32 hub, and the hub is connected to the laptop over USB. The joystick is wired directly to the FreeNove ESP32.
 
