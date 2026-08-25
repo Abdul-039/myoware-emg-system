@@ -32,47 +32,12 @@ myoware-emg-system/
     └── (optional additional project notes)
 ```
 
-## Hardware block diagram
+## Hardware architecture
 
-```text
-+---------------------+      ESP-NOW / Wi-Fi      +---------------------+
-| MyoWare Shield 1    | -----------------------> | FreeNove ESP32 Hub   |
-| (EMG sensor 1)      |                          | (ESP-IDF receiver)  |
-+---------------------+                          | - receives packets  |
-                                                  | - stores EMG data   |
-                                                  | - reads joystick    |
-                                                  | - sends CSV to USB  |
-                                                  +-----------+---------+
-                                                              |
-                                                              | USB cable
-                                                              v
-                                                  +----------------------+
-                                                  | Laptop / PC          |
-                                                  | - serial monitor     |
-                                                  | - Python visualizer  |
-                                                  | - CSV logging        |
-                                                  +----------------------+
+![EMG Data Acquisition System using ESP-NOW](../architecture.png)
 
-+---------------------+      ESP-NOW / Wi-Fi      +---------------------+
-| MyoWare Shield 2    | -----------------------> | FreeNove ESP32 Hub   |
-| (EMG sensor 2)      |                          | (same central hub)  |
-+---------------------+                          | - coordinates both  |
-                                                  | - separates node    |
-                                                  | - merges stream     |
-                                                  +---------------------+
+> The image above shows the real setup: two MyoWare sensor boards communicate wirelessly with one FreeNove ESP32 hub, and the hub is connected to the laptop over USB. The joystick is wired directly to the FreeNove ESP32.
 
-+---------------------+
-| Joystick            |
-| (wired to hub)      |
-+---------------------+
-        |
-        v
-+---------------------+
-| FreeNove ESP32 Hub  |
-| receives joystick   |
-| ADC input           |
-+---------------------+
-```
 
 ## Software running on each device
 
