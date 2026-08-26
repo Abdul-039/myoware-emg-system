@@ -38,7 +38,10 @@ class CsvLivePlotter:
         self.window_size = window_size
         self.ser = None
         self.sample_count = 0
-        self.draw_interval = 0.05  # seconds between redraws (20 Hz)
+        self.emg1_count = 0
+        self.emg2_count = 0
+        self.joy_count = 0
+        self.draw_interval = 0.02  # ~50 Hz redraws to keep the live waveform responsive
         self.last_draw_time = 0.0
 
         # --- Logging Variables ---
@@ -47,33 +50,32 @@ class CsvLivePlotter:
         self.csv_writer = None
 
         self.timestamps = deque(maxlen=window_size)
-        
-        # Dual EMG queues
-        self.emg1_series = [deque(maxlen=window_size) for _ in range(10)]
-        self.emg2_series = [deque(maxlen=window_size) for _ in range(10)]
-        
+
+        # Flattened continuous EMG waveforms: one sample per deque element.
+        # Keep the x/y buffers in lockstep so each value has a matching time index.
+        self.emg1_series = deque(maxlen=window_size)
+        self.emg2_series = deque(maxlen=window_size)
+        self.emg1_timestamps = deque(maxlen=window_size)
+        self.emg2_timestamps = deque(maxlen=window_size)
+
+        # Joystick is still sampled once per receiver loop (~100 Hz), not per EMG sample.
         self.joy_series = [deque(maxlen=window_size) for _ in range(3)]
+        self.joy_timestamps = deque(maxlen=window_size)
 
         plt.ion()
-        # Expanded to 3 subplots for Dual Node + Joystick
-        self.fig, self.axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+        # Expanded to 3 subplots for Dual Node + Joystick.
+        # Keep one shared sample timeline across all traces so the flattened
+        # 1 kHz waveform stays visible in the same time window as the joystick.
+        self.fig, self.axes = plt.subplots(3, 1, figsize=(12, 10), sharex=False)
         self.fig.suptitle("Live Dual EMG + Joystick Visualizer")
-        
+
         self.axes[0].set_title("EMG Node 1")
         self.axes[1].set_title("EMG Node 2")
         self.axes[2].set_title("Joystick & Button")
 
-        # Lines for Node 1
-        self.emg1_lines = []
-        for i in range(10):
-            line, = self.axes[0].plot([], [], label=f"Node1 {i}")
-            self.emg1_lines.append(line)
-
-        # Lines for Node 2
-        self.emg2_lines = []
-        for i in range(10):
-            line, = self.axes[1].plot([], [], label=f"Node2 {i}")
-            self.emg2_lines.append(line)
+        # Each node is a single continuous waveform, not 10 overlaid channels.
+        self.emg1_line, = self.axes[0].plot([], [], label="Node 1")
+        self.emg2_line, = self.axes[1].plot([], [], label="Node 2")
 
         # Lines for Joystick
         self.joy_lines = []
@@ -81,10 +83,12 @@ class CsvLivePlotter:
             line, = self.axes[2].plot([], [], label=label, color=color)
             self.joy_lines.append(line)
 
-        self.axes[0].legend(loc="upper right", ncol=5, fontsize='small')
-        self.axes[1].legend(loc="upper right", ncol=5, fontsize='small')
+        self.axes[0].legend(loc="upper right")
+        self.axes[1].legend(loc="upper right")
         self.axes[2].legend(loc="upper right")
-        self.axes[2].set_xlabel("Sample")
+        self.axes[0].set_xlabel("Time (ms)")
+        self.axes[1].set_xlabel("Time (ms)")
+        self.axes[2].set_xlabel("Time (ms)")
         
         # UI Element for Logging Status 
         self.status_text = self.fig.text(0.02, 0.96, "Logging: OFF (Press 'L' to toggle)", 
@@ -211,76 +215,78 @@ class CsvLivePlotter:
     def update(self, row):
         # Handle Logging
         if self.is_logging and self.csv_writer is not None:
-            csv_row = ([row["seq"], row["timestamp_ms"]] + 
-                       row["emg1"] + row["emg2"] + 
+            csv_row = ([row["seq"], row["timestamp_ms"]] +
+                       row["emg1"] + row["emg2"] +
                        [row["joy_x"], row["joy_y"], row["btn"]])
             self.csv_writer.writerow(csv_row)
 
-        self.timestamps.append(self.sample_count)
-        self.sample_count += 1
+        # Each incoming row carries 10 consecutive samples from the original
+        # 1 kHz EMG stream. Flatten them into one continuous time series and
+        # keep the x-axis in milliseconds so it matches the real sample timing.
+        batch_len = max(len(row["emg1"]), len(row["emg2"]), 1)
+        start = self.sample_count
 
-        for idx, value in enumerate(row["emg1"]):
-            self.emg1_series[idx].append(value)
-            
-        for idx, value in enumerate(row["emg2"]):
-            self.emg2_series[idx].append(value)
+        if row["emg1"]:
+            values = list(row["emg1"])
+            self.emg1_timestamps.extend(range(start, start + len(values)))
+            self.emg1_series.extend(values)
 
+        if row["emg2"]:
+            values = list(row["emg2"])
+            self.emg2_timestamps.extend(range(start, start + len(values)))
+            self.emg2_series.extend(values)
+
+        # Joystick is sampled once per payload (~100 Hz), but share the same
+        # millisecond time base for the visible window.
+        self.joy_timestamps.append(self.sample_count)
         self.joy_series[0].append(row["joy_x"])
         self.joy_series[1].append(row["joy_y"])
         self.joy_series[2].append(row["btn"])
+
+        self.sample_count += batch_len
 
         now = time.time()
         if now - self.last_draw_time >= self.draw_interval:
             self._draw()
 
     def _draw(self):
-        x = list(self.timestamps)
-        if len(x) < 2:
-            return
+        xmax = float(max(self.sample_count, 1))
+        xmin = max(0.0, xmax - float(self.window_size))
 
-        xmin = max(0, x[-1] - self.window_size)
-        xmax = x[-1]
-
-        # Update Node 1 Lines
-        for idx, line in enumerate(self.emg1_lines):
-            y = list(self.emg1_series[idx])
-            line.set_data(x, y)
-
-        # Autoscale Node 1 y-axis
-        all_emg1 = [v for dq in self.emg1_series for v in dq]
-        if all_emg1:
-            ymin = min(all_emg1)
-            ymax = max(all_emg1)
+        # EMG sample x-axis is flattened to the true physical sample counter.
+        emg1_x = list(self.emg1_timestamps)
+        emg1_y = list(self.emg1_series)
+        if emg1_x:
+            self.emg1_line.set_data(emg1_x, emg1_y)
+            ymin = min(emg1_y)
+            ymax = max(emg1_y)
             if ymin == ymax:
                 margin = max(1, abs(ymin) * 0.05)
                 ymin -= margin
                 ymax += margin
             self.axes[0].set_ylim(ymin, ymax)
-        self.axes[0].set_xlim(xmin, xmax)
+            self.axes[0].set_xlim(xmin, xmax)
 
-        # Update Node 2 Lines
-        for idx, line in enumerate(self.emg2_lines):
-            y = list(self.emg2_series[idx])
-            line.set_data(x, y)
-
-        # Autoscale Node 2 y-axis
-        all_emg2 = [v for dq in self.emg2_series for v in dq]
-        if all_emg2:
-            ymin = min(all_emg2)
-            ymax = max(all_emg2)
+        emg2_x = list(self.emg2_timestamps)
+        emg2_y = list(self.emg2_series)
+        if emg2_x:
+            self.emg2_line.set_data(emg2_x, emg2_y)
+            ymin = min(emg2_y)
+            ymax = max(emg2_y)
             if ymin == ymax:
                 margin = max(1, abs(ymin) * 0.05)
                 ymin -= margin
                 ymax += margin
             self.axes[1].set_ylim(ymin, ymax)
-        self.axes[1].set_xlim(xmin, xmax)
+            self.axes[1].set_xlim(xmin, xmax)
 
-        # Update joystick lines
+        # Joystick uses one value per receiver loop, but it is plotted against the
+        # same global sample timeline so all traces share the same x-axis window.
+        joy_x = list(self.joy_timestamps)
         for idx, line in enumerate(self.joy_lines):
             y = list(self.joy_series[idx])
-            line.set_data(x, y)
+            line.set_data(joy_x, y)
 
-        # Autoscale joystick y-axis
         all_joy = [v for dq in self.joy_series for v in dq]
         if all_joy:
             ymin = min(all_joy)
